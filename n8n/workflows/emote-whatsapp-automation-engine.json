@@ -1,0 +1,274 @@
+{
+  "name": "EMOTE — WhatsApp Automation Engine",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// EXTRACT EVENT + CONFIG FROM TRIGGER INPUT\n// ============================================\nconst input = $input.first().json;\n\nconst event = input.event;\nconst config = input.config || {};\n\nif (!event || !event.tenantId) {\n  return [{ json: { action: 'error', error: 'Missing event or tenantId' } }];\n}\n\n// Extract key fields\nconst messageText = (event.text || '').trim().toLowerCase();\nconst messageType = event.messageType || 'unknown';\n\n// Check for human handoff keywords\nconst handoffKeywords = config.humanHandoffKeywords || ['human', 'agent', 'person', 'help'];\nconst isHandoffRequest = handoffKeywords.some(kw => messageText.includes(kw.toLowerCase()));\n\nif (isHandoffRequest && config.humanHandoffEnabled !== false) {\n  return [{ json: {\n    action: 'handoff',\n    event,\n    config,\n    replyText: config.humanHandoffMessage || 'Connecting you with a team member. Please wait.',\n    messageType\n  }}];\n}\n\n// Determine reply text\nlet replyText = '';\nconst autoReplyCount = event.metadata?.autoReplyCount || 0;\n\nif (autoReplyCount === 0 && config.welcomeMessage) {\n  // First message — send welcome\n  replyText = config.welcomeMessage;\n} else {\n  // Subsequent messages — send fallback\n  replyText = config.fallbackMessage || 'Thank you for your message. Our team will get back to you shortly.';\n}\n\nreturn [{ json: {\n  action: 'reply',\n  event,\n  config,\n  replyText,\n  messageType\n}}];"
+      },
+      "id": "process-message",
+      "name": "Process Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.action }}",
+              "value2": "handoff"
+            }
+          ]
+        }
+      },
+      "id": "is-handoff",
+      "name": "Is Handoff?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://wise-proud-toad.ngrok-free.app/api/internal/conversations/context",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Emote-Signature",
+              "value": "4300481c24d6cb772bbc6d2d0609e72e9e2568c3a3369d2f5548b78f22ac46e8"
+            },
+            {
+              "name": "X-Emote-Timestamp",
+              "value": "={{ new Date().toISOString() }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tenantId",
+              "value": "={{ $json.event.tenantId }}"
+            },
+            {
+              "name": "connectionId",
+              "value": "={{ $json.event.connectionId }}"
+            },
+            {
+              "name": "customerPhone",
+              "value": "={{ $json.event.customerPhone }}"
+            },
+            {
+              "name": "status",
+              "value": "HUMAN_HANDOFF"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "update-handoff-status",
+      "name": "Update Conversation → Handoff",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 180],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://wise-proud-toad.ngrok-free.app/api/internal/whatsapp/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Emote-Signature",
+              "value": "4300481c24d6cb772bbc6d2d0609e72e9e2568c3a3369d2f5548b78f22ac46e8"
+            },
+            {
+              "name": "X-Emote-Timestamp",
+              "value": "={{ new Date().toISOString() }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ tenantId: $('Process Message').first().json.event.tenantId, connectionId: $('Process Message').first().json.event.connectionId, to: $('Process Message').first().json.event.customerPhone, type: 'text', message: { type: 'text', text: { body: $('Process Message').first().json.replyText } } }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "send-handoff-reply",
+      "name": "Send Handoff Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 180],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://wise-proud-toad.ngrok-free.app/api/internal/whatsapp/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Emote-Signature",
+              "value": "4300481c24d6cb772bbc6d2d0609e72e9e2568c3a3369d2f5548b78f22ac46e8"
+            },
+            {
+              "name": "X-Emote-Timestamp",
+              "value": "={{ new Date().toISOString() }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ tenantId: $json.event.tenantId, connectionId: $json.event.connectionId, to: $json.event.customerPhone, type: 'text', message: { type: 'text', text: { body: $json.replyText } } }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "send-auto-reply",
+      "name": "Send Auto Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 420],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log the result\nconst sendResult = $input.first().json;\nconst event = $('Process Message').first().json.event;\n\nreturn [{ json: {\n  status: 'completed',\n  action: 'handoff',\n  tenantId: event.tenantId,\n  customerPhone: event.customerPhone,\n  sendSuccess: sendResult.success !== false,\n  error: sendResult.error || null\n}}];"
+      },
+      "id": "handoff-result",
+      "name": "Handoff Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 180]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log the result\nconst sendResult = $input.first().json;\nconst event = $('Process Message').first().json.event;\n\nreturn [{ json: {\n  status: 'completed',\n  action: 'reply',\n  tenantId: event.tenantId,\n  customerPhone: event.customerPhone,\n  sendSuccess: sendResult.success !== false,\n  error: sendResult.error || null\n}}];"
+      },
+      "id": "reply-result",
+      "name": "Reply Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 420]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Process Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Message": {
+      "main": [
+        [
+          {
+            "node": "Is Handoff?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Handoff?": {
+      "main": [
+        [
+          {
+            "node": "Update Conversation → Handoff",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Auto Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Conversation → Handoff": {
+      "main": [
+        [
+          {
+            "node": "Send Handoff Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Handoff Message": {
+      "main": [
+        [
+          {
+            "node": "Handoff Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Auto Reply": {
+      "main": [
+        [
+          {
+            "node": "Reply Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "emote",
+      "id": "emote-tag"
+    },
+    {
+      "name": "whatsapp",
+      "id": "whatsapp-tag"
+    }
+  ],
+  "pinData": {}
+}

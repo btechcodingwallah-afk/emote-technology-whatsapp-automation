@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.local
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    networks:
+      - emote-network
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: emote_whatsapp
+      POSTGRES_USER: emote
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-emote_dev_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./supabase/migrations/001_initial_schema.sql:/docker-entrypoint-initdb.d/001_initial_schema.sql
+    restart: unless-stopped
+    networks:
+      - emote-network
+
+volumes:
+  postgres_data:
+
+networks:
+  emote-network:
+    driver: bridge

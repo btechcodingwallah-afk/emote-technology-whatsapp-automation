@@ -1,0 +1,399 @@
+{
+  "name": "EMOTE — WhatsApp Incoming Message Router",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "emote/whatsapp/incoming",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "emote-whatsapp-incoming"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// VERIFY AUTHENTICATION + TIMESTAMP\n// ============================================\nconst N8N_WEBHOOK_SECRET = '4300481c24d6cb772bbc6d2d0609e72e9e2568c3a3369d2f5548b78f22ac46e8';\n\nconst headers = $input.first().json.headers || {};\nconst signature = headers['x-emote-signature'];\nconst secret = headers['x-emote-secret'];\nconst timestamp = headers['x-emote-timestamp'];\nconst rawBody = $input.first().json.body;\n\nif (!signature && !secret) {\n  return [{ json: { verified: false, error: 'Missing authentication headers' } }];\n}\n\n// Check timestamp freshness if provided (5 minute window)\nif (timestamp) {\n  const requestTime = new Date(timestamp).getTime();\n  const now = Date.now();\n  const REPLAY_WINDOW_MS = 5 * 60 * 1000;\n  if (!isNaN(requestTime) && Math.abs(now - requestTime) > REPLAY_WINDOW_MS) {\n    return [{ json: { verified: false, error: 'Request timestamp outside acceptable window' } }];\n  }\n}\n\n// Parse the body and pass through\nconst event = typeof rawBody === 'string' ? JSON.parse(rawBody) : rawBody;\nreturn [{ json: { verified: true, event } }];"
+      },
+      "id": "verify-signature",
+      "name": "Verify HMAC Signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.verified }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-verified",
+      "name": "Signature Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: $json.error || 'Unauthorized' }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "reject-unauthorized",
+      "name": "Reject (401)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 460]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// VALIDATE REQUIRED FIELDS\n// ============================================\nconst event = $json.event;\n\nconst required = ['tenantId', 'connectionId', 'phoneNumberId', 'messageId', 'eventCategory'];\nconst missing = required.filter(f => !event[f]);\n\nif (missing.length > 0) {\n  return [{ json: { valid: false, error: `Missing required fields: ${missing.join(', ')}`, event } }];\n}\n\n// Only allow real incoming customer messages (ignore delivery receipts/status updates)\nif (event.eventCategory !== 'message') {\n  return [{ json: { valid: false, error: `Non-message event category: ${event.eventCategory}`, event } }];\n}\n\nreturn [{ json: { valid: true, event } }];"
+      },
+      "id": "validate-payload",
+      "name": "Validate Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 240]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.valid }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-valid",
+      "name": "Payload Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: $json.error || 'Invalid payload' }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "reject-invalid",
+      "name": "Reject (400)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1340, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.event.eventCategory }}",
+              "value2": "message"
+            }
+          ]
+        }
+      },
+      "id": "is-message",
+      "name": "Is Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1340, 180]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'ignored', reason: 'Non-message event' }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "ignore-non-message",
+      "name": "Ignore (200)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1560, 340]
+    },
+    {
+      "parameters": {
+        "url": "https://wise-proud-toad.ngrok-free.app/api/internal/automation/config",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "tenantId",
+              "value": "={{ $json.event.tenantId }}"
+            },
+            {
+              "name": "connectionId",
+              "value": "={{ $json.event.connectionId }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Emote-Signature",
+              "value": "4300481c24d6cb772bbc6d2d0609e72e9e2568c3a3369d2f5548b78f22ac46e8"
+            },
+            {
+              "name": "X-Emote-Timestamp",
+              "value": "={{ new Date().toISOString() }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "fetch-automation-config",
+      "name": "Fetch Automation Config",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1560, 120],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// ROUTE TO AUTOMATION ENGINE\n// ============================================\nconst event = $('Validate Payload').first().json.event;\nconst configResponse = $input.first().json;\n\n// Default config if fetch failed\nconst config = configResponse.config || {\n  enabled: true,\n  mode: 'AUTO',\n  welcomeMessage: 'Hello! How can we help you?',\n  humanHandoffEnabled: true,\n  humanHandoffKeywords: ['human', 'agent', 'person', 'help'],\n  humanHandoffMessage: 'Connecting you with a team member.',\n  fallbackMessage: 'Sorry, I did not understand that.',\n  maxAutoRepliesPerConversation: 50,\n  aiEnabled: false,\n};\n\n// Check if automation is enabled\nif (!config.enabled) {\n  return [{ json: { action: 'skip', reason: 'Automation disabled for tenant', event } }];\n}\n\n// Check conversation status from metadata\nconst conversationStatus = event.metadata?.conversationStatus;\nif (conversationStatus === 'HUMAN_HANDOFF') {\n  return [{ json: { action: 'skip', reason: 'Conversation in human handoff', event } }];\n}\n\n// Check auto-reply limit\nconst autoReplyCount = event.metadata?.autoReplyCount || 0;\nif (autoReplyCount >= config.maxAutoRepliesPerConversation) {\n  return [{ json: { action: 'skip', reason: 'Auto-reply limit reached', event } }];\n}\n\n// Pass everything to the automation engine\nreturn [{ json: { action: 'process', event, config } }];"
+      },
+      "id": "prepare-automation",
+      "name": "Prepare Automation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 120]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.action }}",
+              "value2": "process"
+            }
+          ]
+        }
+      },
+      "id": "should-process",
+      "name": "Should Process?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2000, 120]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'skipped', reason: $json.reason }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "skip-response",
+      "name": "Skip (200)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2220, 280]
+    },
+    {
+      "parameters": {
+        "mode": "each",
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "options": {}
+      },
+      "id": "call-automation",
+      "name": "Call Automation Engine",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [2220, 60]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'processed', tenantId: $('Validate Payload').first().json.event.tenantId }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "success-response",
+      "name": "Success (200)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2440, 60]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Verify HMAC Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify HMAC Signature": {
+      "main": [
+        [
+          {
+            "node": "Signature Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signature Valid?": {
+      "main": [
+        [
+          {
+            "node": "Validate Payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject (401)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Payload": {
+      "main": [
+        [
+          {
+            "node": "Payload Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payload Valid?": {
+      "main": [
+        [
+          {
+            "node": "Is Message?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject (400)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Message?": {
+      "main": [
+        [
+          {
+            "node": "Fetch Automation Config",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignore (200)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Automation Config": {
+      "main": [
+        [
+          {
+            "node": "Prepare Automation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Automation": {
+      "main": [
+        [
+          {
+            "node": "Should Process?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Process?": {
+      "main": [
+        [
+          {
+            "node": "Call Automation Engine",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip (200)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Automation Engine": {
+      "main": [
+        [
+          {
+            "node": "Success (200)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "emote",
+      "id": "emote-tag"
+    },
+    {
+      "name": "whatsapp",
+      "id": "whatsapp-tag"
+    }
+  ],
+  "pinData": {}
+}

@@ -1,36 +1,89 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Emote Technology — WhatsApp Automation Platform
+
+Enterprise-grade multi-tenant WhatsApp Business Cloud API & n8n automation platform.
+
+## Architecture
+
+```
+WhatsApp User
+     │  (sends message)
+     ▼
+Meta WhatsApp Cloud API
+     │  (POST /api/webhooks/meta/whatsapp)
+     ▼
+Emote Next.js Backend
+     │  - Verifies Meta HMAC-SHA256 signature
+     │  - Resolves tenant from phone number
+     │  - Deduplicates events & tracks conversations in Supabase
+     │  - Signs payload with HMAC-SHA256 + timestamp
+     ▼
+n8n Incoming Router
+     │  - Verifies authentication headers
+     │  - Validates payload & filters events
+     ▼
+n8n Automation Engine
+     │  - Human handoff keyword detection
+     │  - Automated reply generation
+     ▼
+Emote Backend (/api/internal/whatsapp/send)
+     │  - Verifies internal request signature
+     │  - Decrypts Meta token via AES-256-GCM
+     │  - Dispatches message via Meta Graph API
+     ▼
+WhatsApp User (receives response)
+```
+
+## Features
+
+- **Multi-Tenant WhatsApp Integration**: Embedded signup & cloud API support.
+- **Enterprise Security**: Token encryption via AES-256-GCM, HMAC signing, replay protection.
+- **n8n Automation Pipeline**: Decoupled automation engine with zero Meta token exposure to n8n.
+- **Human Handoff**: Automatic detection of handoff keywords and status switching.
+- **Delivery Receipt Filtering**: Safeguards against runaway feedback loops.
 
 ## Getting Started
 
-First, run the development server:
+### 1. Install Dependencies
+
+```bash
+npm install
+```
+
+### 2. Environment Configuration
+
+Copy `.env.example` to `.env.local` and populate the values:
+
+```bash
+cp .env.example .env.local
+```
+
+### 3. Database Setup
+
+Apply Supabase migrations located in `supabase/migrations/`:
+- `001_initial_schema.sql`
+- `002_n8n_automation.sql`
+
+### 4. Run Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 5. Expose Webhook (Local Dev)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+ngrok http 3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Set the Meta WhatsApp webhook callback URL to:
+`https://<your-tunnel-url>/api/webhooks/meta/whatsapp`
 
-## Learn More
+## Workflows
 
-To learn more about Next.js, take a look at the following resources:
+Import the workflows from `n8n/workflows/` into your n8n instance:
+1. `emote-whatsapp-incoming-router.json`
+2. `emote-whatsapp-automation-engine.json`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## License
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT
