@@ -357,12 +357,21 @@ export default function WhatsAppPage() {
           <span className="text-red-400">⚠️</span>
           <div>
             <p className="text-sm font-medium text-red-300">{error}</p>
-            <button
-              onClick={() => setError(null)}
-              className="mt-1 text-xs text-red-400 hover:text-red-300"
-            >
-              Dismiss
-            </button>
+            {error === 'Please log in first.' ? (
+              <a
+                href="/login"
+                className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-emerald-400 px-3 py-1.5 text-xs font-semibold text-slate-950 transition-opacity hover:opacity-90"
+              >
+                Log In Now →
+              </a>
+            ) : (
+              <button
+                onClick={() => setError(null)}
+                className="mt-1 text-xs text-red-400 hover:text-red-300"
+              >
+                Dismiss
+              </button>
+            )}
           </div>
         </div>
       )}
