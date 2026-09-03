@@ -170,15 +170,17 @@ export default function WhatsAppPage() {
       const appId = process.env.NEXT_PUBLIC_META_APP_ID || '2635620483523953';
       const configId = process.env.NEXT_PUBLIC_META_CONFIG_ID || '1315193267178378';
 
-      // Build extras based on connection type
+      // Build extras based on connection type (Meta Embedded Signup specification)
       const extras: Record<string, unknown> = {
-        setup: {}, // Empty for v4 — all config from Configuration ID
+        feature: 'whatsapp_embedded_signup',
+        version: 'v3',
+        sessionInfoVersion: '3',
+        setup: {},
       };
 
       // For Coexistence, add featureType
       if (selectedMode === 'COEXISTENCE') {
         extras.featureType = 'whatsapp_business_app_onboarding';
-        extras.sessionInfoVersion = '3';
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -194,6 +196,7 @@ export default function WhatsAppPage() {
         config_id: configId,
         response_type: 'code',
         override_default_response_type: true,
+        scope: 'whatsapp_business_management,whatsapp_business_messaging',
         extras,
       });
 
