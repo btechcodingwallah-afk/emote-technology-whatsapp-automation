@@ -167,12 +167,8 @@ export default function WhatsAppPage() {
       await loadFBSDK();
 
       // 3. Launch FB.login with Embedded Signup v4
-      const appId = process.env.NEXT_PUBLIC_META_APP_ID;
-      const configId = process.env.NEXT_PUBLIC_META_CONFIG_ID;
-
-      if (!appId || !configId) {
-        throw new Error('Meta App configuration is missing');
-      }
+      const appId = process.env.NEXT_PUBLIC_META_APP_ID || '2635620483523953';
+      const configId = process.env.NEXT_PUBLIC_META_CONFIG_ID || '1315193267178378';
 
       // Build extras based on connection type
       const extras: Record<string, unknown> = {
@@ -301,7 +297,7 @@ export default function WhatsAppPage() {
       (window as any).fbAsyncInit = function () {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (window as any).FB.init({
-          appId: process.env.NEXT_PUBLIC_META_APP_ID,
+          appId: process.env.NEXT_PUBLIC_META_APP_ID || '2635620483523953',
           autoLogAppEvents: true,
           xfbml: true,
           version: 'v21.0',
