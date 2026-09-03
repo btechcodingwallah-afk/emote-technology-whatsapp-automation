@@ -404,10 +404,19 @@ export default function WhatsAppPage() {
           </div>
 
           <div className="mt-6 flex gap-3">
-            <button className="rounded-xl border border-white/10 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-white/5">
+            <button
+              onClick={launchSignup}
+              className="rounded-xl border border-white/10 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-white/5"
+            >
               Reconnect
             </button>
-            <button className="rounded-xl border border-red-500/20 px-4 py-2 text-sm font-medium text-red-400 transition hover:bg-red-500/5">
+            <button
+              onClick={() => {
+                setConnectionState('disconnected');
+                setConnectionInfo(null);
+              }}
+              className="rounded-xl border border-red-500/20 px-4 py-2 text-sm font-medium text-red-400 transition hover:bg-red-500/5"
+            >
               Disconnect
             </button>
           </div>
