@@ -301,9 +301,10 @@ export default function WhatsAppPage() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (window as any).FB.init({
           appId: process.env.NEXT_PUBLIC_META_APP_ID || '2635620483523953',
-          autoLogAppEvents: true,
+          cookie: true,
           xfbml: true,
           version: 'v21.0',
+          fedCM: false,
         });
         resolve();
       };
